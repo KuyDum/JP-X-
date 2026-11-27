@@ -379,7 +379,7 @@ local rAmount = row(roll_sec, "Amount", "สูงสุด " .. MAX_ROLL)
 local amountBox = input(rAmount, MAX_ROLL)
 local rRoll = row(roll_sec, "Roll Once", "สุ่ม 1 ครั้ง")
 local rAuto = row(roll_sec, "Auto Roll", "สุ่มต่อเนื่อง")
-local rAutoDelay = row(roll_sec, "Auto Delay", "วินาที (ต่ำสุด 0.5)")
+local rAutoDelay = row(roll_sec, "Auto Delay", "วินาที (ต่ำสุด 0.01)")
 local autoDelayBox = input(rAutoDelay, 1)
 
 local rolls = 0
@@ -399,7 +399,7 @@ toggle(rAuto, false, function(on)
 		task.spawn(function()
 			while auto and gui.Parent do
 				roll()
-				task.wait(math.max(tonumber(autoDelayBox.Text) or 1, 0.5))
+				task.wait(math.max(tonumber(autoDelayBox.Text) or 1, 0.01))
 			end
 		end)
 	else
