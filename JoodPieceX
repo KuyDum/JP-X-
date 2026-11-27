@@ -3,7 +3,7 @@ local RS = game:GetService("ReplicatedStorage")
 local UIS = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
-local CODE_DELAY = 3 -- หน่วงต่อโค้ด (วินาที)
+local CODE_DELAY = 5 -- หน่วงต่อโค้ด (วินาที)
 local MAX_ROLL = 5   -- สุ่มได้สูงสุด
 local BG_IMAGE = ""  -- ใส่รูปพื้นหลังได้ เช่น getcustomasset("bg.png") หรือ "rbxassetid://123"
 
