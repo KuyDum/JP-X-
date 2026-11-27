@@ -1,0 +1,497 @@
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local CODE_DELAY = 3 -- หน่วงต่อโค้ด (วินาที)
+local MAX_ROLL = 5   -- สุ่มได้สูงสุด
+local BG_IMAGE = ""  -- ใส่รูปพื้นหลังได้ เช่น getcustomasset("bg.png") หรือ "rbxassetid://123"
+
+local codes = {
+	"JoodIsBack", "ReRelease", "25KVisits", "HalloweenPart1",
+	"HalloweenPart2", "50KVisits", "100KVisits", "FreeRewards3",
+	"FreeRewards4", "FixBugs", "Relic", "SPOH", "1KCCU",
+}
+
+local codeRemote = RS:WaitForChild("System"):WaitForChild("Code")
+local rollRemote = RS:WaitForChild("System"):WaitForChild("RandomItem")
+
+-- สี
+local C = {
+	bg = Color3.fromRGB(20, 14, 30),
+	panel = Color3.fromRGB(40, 30, 58),
+	accent = Color3.fromRGB(236, 72, 153),
+	green = Color3.fromRGB(60, 160, 100),
+	red = Color3.fromRGB(190, 70, 80),
+	off = Color3.fromRGB(95, 85, 110),
+	text = Color3.new(1, 1, 1),
+	sub = Color3.fromRGB(185, 170, 200),
+}
+
+-- ที่วาง UI
+local ok, parent = pcall(function()
+	return (gethui and gethui()) or game:GetService("CoreGui")
+end)
+if not ok or not parent then
+	parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+end
+if parent:FindFirstChild("CodeRollUI") then
+	parent.CodeRollUI:Destroy()
+end
+
+local function new(class, props, par)
+	local i = Instance.new(class)
+	for k, v in pairs(props) do i[k] = v end
+	i.Parent = par
+	return i
+end
+local function corner(inst, r)
+	new("UICorner", {CornerRadius = UDim.new(0, r)}, inst)
+end
+local orderN = 0
+local function nextOrder()
+	orderN += 1
+	return orderN
+end
+
+local conns = {}
+local gui = new("ScreenGui", {Name = "CodeRollUI", ResetOnSpawn = false}, parent)
+
+-- ===== หน้าต่างหลัก =====
+local NORMAL = UDim2.new(0.55, 0, 0.8, 0)
+local LARGE = UDim2.new(0.75, 0, 0.92, 0)
+
+local win = new("Frame", {
+	Name = "Window",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = NORMAL,
+	BackgroundColor3 = C.bg,
+	BorderSizePixel = 0,
+	ClipsDescendants = true,
+}, gui)
+corner(win, 14)
+new("UISizeConstraint", {MinSize = Vector2.new(380, 240), MaxSize = Vector2.new(640, 380)}, win)
+local uiscale = new("UIScale", {Scale = 1}, win)
+new("UIGradient", {
+	Color = ColorSequence.new(Color3.fromRGB(24, 16, 38), Color3.fromRGB(70, 22, 62)),
+	Rotation = 35,
+}, win)
+new("UIStroke", {Color = Color3.fromRGB(255, 255, 255), Transparency = 0.85, Thickness = 1}, win)
+
+if BG_IMAGE ~= "" then
+	local img = new("ImageLabel", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Image = BG_IMAGE,
+		ScaleType = Enum.ScaleType.Crop,
+		ImageTransparency = 0.3,
+		ZIndex = 0,
+	}, win)
+	corner(img, 14)
+end
+
+-- แถบบน + ปุ่มแดง/เหลือง/เขียว
+local bar = new("Frame", {Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, Active = true}, win)
+
+local function dot(x, color)
+	local d = new("TextButton", {
+		Position = UDim2.new(0, x, 0, 12),
+		Size = UDim2.fromOffset(13, 13),
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		Text = "",
+		AutoButtonColor = false,
+	}, bar)
+	corner(d, 7)
+	return d
+end
+local dotRed = dot(14, Color3.fromRGB(255, 95, 86))
+local dotYellow = dot(34, Color3.fromRGB(255, 189, 46))
+local dotGreen = dot(54, Color3.fromRGB(39, 201, 63))
+
+new("TextLabel", {
+	Position = UDim2.new(0, 84, 0, 4),
+	Size = UDim2.fromOffset(220, 16),
+	BackgroundTransparency = 1,
+	Text = "Code Roll",
+	TextColor3 = C.text,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Font = Enum.Font.Arcade,
+	TextSize = 15,
+}, bar)
+new("TextLabel", {
+	Position = UDim2.new(0, 84, 0, 20),
+	Size = UDim2.fromOffset(220, 12),
+	BackgroundTransparency = 1,
+	Text = "codes + random item",
+	TextColor3 = C.sub,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Font = Enum.Font.Code,
+	TextSize = 11,
+}, bar)
+
+-- แถบสถานะล่าง
+local status = new("TextLabel", {
+	Position = UDim2.new(0, 14, 1, -24),
+	Size = UDim2.new(1, -28, 0, 20),
+	BackgroundTransparency = 1,
+	Text = "พร้อมใช้งาน",
+	TextColor3 = C.sub,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextTruncate = Enum.TextTruncate.AtEnd,
+	Font = Enum.Font.Code,
+	TextSize = 12,
+}, win)
+local function setStatus(t) status.Text = t end
+
+-- ===== แถบด้านข้าง + หน้า =====
+local sidebar = new("Frame", {
+	Position = UDim2.new(0, 8, 0, 40),
+	Size = UDim2.new(0, 104, 1, -68),
+	BackgroundTransparency = 1,
+}, win)
+new("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder}, sidebar)
+
+local content = new("Frame", {
+	Position = UDim2.new(0, 120, 0, 40),
+	Size = UDim2.new(1, -128, 1, -68),
+	BackgroundTransparency = 1,
+}, win)
+
+local pages, tabs = {}, {}
+local function selectTab(name)
+	for n, p in pairs(pages) do p.Visible = (n == name) end
+	for n, t in pairs(tabs) do
+		local on = (n == name)
+		t.btn.BackgroundTransparency = on and 0.35 or 1
+		t.btn.TextColor3 = on and C.text or C.sub
+		t.bar.Visible = on
+	end
+end
+
+local function makeTab(name)
+	local btn = new("TextButton", {
+		Size = UDim2.new(1, 0, 0, 34),
+		BackgroundColor3 = C.panel,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Text = "   " .. name,
+		TextColor3 = C.sub,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Font = Enum.Font.Arcade,
+		TextSize = 14,
+		AutoButtonColor = false,
+		LayoutOrder = nextOrder(),
+	}, sidebar)
+	corner(btn, 8)
+	local accent = new("Frame", {
+		Position = UDim2.new(0, 0, 0.5, -9),
+		Size = UDim2.fromOffset(3, 18),
+		BackgroundColor3 = C.accent,
+		BorderSizePixel = 0,
+		Visible = false,
+	}, btn)
+	corner(accent, 2)
+	tabs[name] = {btn = btn, bar = accent}
+
+	local page = new("ScrollingFrame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = C.accent,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		Visible = false,
+	}, content)
+	new("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder}, page)
+	new("UIPadding", {PaddingRight = UDim.new(0, 6)}, page)
+	pages[name] = page
+	btn.MouseButton1Click:Connect(function() selectTab(name) end)
+	return page
+end
+
+-- ===== ชิ้นส่วน UI =====
+local function section(page, title, desc)
+	local wrap = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = nextOrder(),
+	}, page)
+	new("UIListLayout", {Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder}, wrap)
+
+	local head = new("TextButton", {
+		Size = UDim2.new(1, 0, 0, 42),
+		BackgroundColor3 = C.panel,
+		BackgroundTransparency = 0.3,
+		BorderSizePixel = 0,
+		Text = "",
+		AutoButtonColor = false,
+		LayoutOrder = 0,
+	}, wrap)
+	corner(head, 8)
+	new("TextLabel", {
+		Position = UDim2.new(0, 12, 0, 5), Size = UDim2.new(1, -50, 0, 16),
+		BackgroundTransparency = 1, Text = title, TextColor3 = C.text,
+		TextXAlignment = Enum.TextXAlignment.Left, Font = Enum.Font.Arcade, TextSize = 15,
+	}, head)
+	new("TextLabel", {
+		Position = UDim2.new(0, 12, 0, 23), Size = UDim2.new(1, -50, 0, 14),
+		BackgroundTransparency = 1, Text = desc, TextColor3 = C.sub,
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+		Font = Enum.Font.Code, TextSize = 11,
+	}, head)
+	local arrow = new("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
+		Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, Text = "-",
+		TextColor3 = C.sub, Font = Enum.Font.Arcade, TextSize = 18,
+	}, head)
+
+	local body = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = 1,
+	}, wrap)
+	new("UIListLayout", {Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder}, body)
+
+	local open = true
+	head.MouseButton1Click:Connect(function()
+		open = not open
+		body.Visible = open
+		arrow.Text = open and "-" or "+"
+	end)
+	return body
+end
+
+local function row(parent, title, desc)
+	local r = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 46),
+		BackgroundColor3 = C.panel,
+		BackgroundTransparency = 0.5,
+		BorderSizePixel = 0,
+		LayoutOrder = nextOrder(),
+	}, parent)
+	corner(r, 8)
+	new("TextLabel", {
+		Position = UDim2.new(0, 12, 0, 6), Size = UDim2.new(1, -112, 0, 16),
+		BackgroundTransparency = 1, Text = title, TextColor3 = C.text,
+		TextXAlignment = Enum.TextXAlignment.Left, Font = Enum.Font.Arcade, TextSize = 14,
+	}, r)
+	new("TextLabel", {
+		Position = UDim2.new(0, 12, 0, 25), Size = UDim2.new(1, -112, 0, 14),
+		BackgroundTransparency = 1, Text = desc or "", TextColor3 = C.sub,
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+		Font = Enum.Font.Code, TextSize = 11,
+	}, r)
+	return r
+end
+
+local function toggle(r, default, cb)
+	local track = new("TextButton", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
+		Size = UDim2.fromOffset(40, 20), Text = "", AutoButtonColor = false, BorderSizePixel = 0,
+	}, r)
+	corner(track, 10)
+	local knob = new("Frame", {Size = UDim2.fromOffset(16, 16), BorderSizePixel = 0, BackgroundColor3 = C.text}, track)
+	corner(knob, 8)
+	local state = default
+	local function render(instant)
+		local pos = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+		local col = state and C.accent or C.off
+		if instant then
+			knob.Position, track.BackgroundColor3 = pos, col
+		else
+			TweenService:Create(knob, TweenInfo.new(0.15), {Position = pos}):Play()
+			TweenService:Create(track, TweenInfo.new(0.15), {BackgroundColor3 = col}):Play()
+		end
+	end
+	render(true)
+	track.MouseButton1Click:Connect(function()
+		state = not state
+		render()
+		cb(state)
+	end)
+end
+
+local function button(r, text, color, cb)
+	local b = new("TextButton", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
+		Size = UDim2.fromOffset(78, 26), BackgroundColor3 = color, BorderSizePixel = 0,
+		Text = text, TextColor3 = C.text, Font = Enum.Font.Arcade, TextSize = 13,
+	}, r)
+	corner(b, 6)
+	b.MouseButton1Click:Connect(function() cb(b) end)
+	return b
+end
+
+local function input(r, default)
+	local box = new("TextBox", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
+		Size = UDim2.fromOffset(60, 26), BackgroundColor3 = Color3.fromRGB(60, 46, 84),
+		BorderSizePixel = 0, Text = tostring(default), TextColor3 = C.text,
+		ClearTextOnFocus = false, Font = Enum.Font.Code, TextSize = 14,
+	}, r)
+	corner(box, 6)
+	return box
+end
+
+-- ===== หน้า Main =====
+local mainPage = makeTab("Main")
+local miscPage = makeTab("Misc")
+
+local codeSec = section(mainPage, "Codes", "ใส่โค้ดที่จดไว้ทั้งหมด")
+local roll_sec = section(mainPage, "Roll", "สุ่มของ (RandomItem)")
+
+-- ใส่โค้ด
+local rCode = row(codeSec, "Redeem All", #codes .. " codes")
+local rCodeDelay = row(codeSec, "Code Delay", "วินาทีต่อโค้ด")
+local codeDelayBox = input(rCodeDelay, CODE_DELAY)
+
+local codeBusy, codeCancel = false, false
+button(rCode, "Start", C.green, function(btn)
+	if codeBusy then codeCancel = true return end
+	codeBusy, codeCancel = true, false
+	btn.Text = "Stop"
+	btn.BackgroundColor3 = C.red
+	task.spawn(function()
+		local d = math.clamp(tonumber(codeDelayBox.Text) or CODE_DELAY, 1, 30)
+		local stopped = false
+		for i, code in ipairs(codes) do
+			if codeCancel or not gui.Parent then stopped = true break end
+			pcall(function() codeRemote:FireServer(code) end)
+			setStatus(("ใส่โค้ด %d/%d: %s"):format(i, #codes, code))
+			task.wait(d)
+		end
+		codeBusy = false
+		if gui.Parent then
+			setStatus(stopped and "หยุดใส่โค้ดแล้ว" or "ใส่โค้ดครบแล้ว")
+			btn.Text = "Start"
+			btn.BackgroundColor3 = C.green
+		end
+	end)
+end)
+
+-- สุ่มของ
+local rAmount = row(roll_sec, "Amount", "สูงสุด " .. MAX_ROLL)
+local amountBox = input(rAmount, MAX_ROLL)
+local rRoll = row(roll_sec, "Roll Once", "สุ่ม 1 ครั้ง")
+local rAuto = row(roll_sec, "Auto Roll", "สุ่มต่อเนื่อง")
+local rAutoDelay = row(roll_sec, "Auto Delay", "วินาที (ต่ำสุด 0.5)")
+local autoDelayBox = input(rAutoDelay, 1)
+
+local rolls = 0
+local function roll()
+	local n = math.clamp(math.floor(tonumber(amountBox.Text) or MAX_ROLL), 1, MAX_ROLL)
+	amountBox.Text = tostring(n)
+	pcall(function() rollRemote:FireServer(n) end)
+	rolls += 1
+	setStatus(("สุ่มแล้ว %d ครั้ง (ส่งค่า %d)"):format(rolls, n))
+end
+button(rRoll, "Roll", Color3.fromRGB(80, 110, 200), function() roll() end)
+
+local auto = false
+toggle(rAuto, false, function(on)
+	auto = on
+	if on then
+		task.spawn(function()
+			while auto and gui.Parent do
+				roll()
+				task.wait(math.max(tonumber(autoDelayBox.Text) or 1, 0.5))
+			end
+		end)
+	else
+		setStatus("หยุดสุ่มอัตโนมัติ")
+	end
+end)
+
+-- ===== หน้า Misc =====
+local uiSec = section(miscPage, "Interface", "ตั้งค่าหน้าต่าง")
+local rHide = row(uiSec, "Hide UI", "ปุ่มลัด: RightShift")
+local rReset = row(uiSec, "Reset Counter", "รีเซ็ตจำนวนครั้งที่สุ่ม")
+local rClose = row(uiSec, "Close UI", "ลบหน้าต่างทิ้ง")
+
+-- ===== เปิด/ปิดหน้าต่าง =====
+local visible = true
+local function setVisible(v)
+	visible = v
+	if v then
+		win.Visible = true
+		TweenService:Create(uiscale, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
+	else
+		local t = TweenService:Create(uiscale, TweenInfo.new(0.15), {Scale = 0.8})
+		t:Play()
+		t.Completed:Connect(function()
+			if not visible then win.Visible = false end
+		end)
+	end
+end
+
+local function closeAll()
+	auto = false
+	codeCancel = true
+	for _, c in ipairs(conns) do c:Disconnect() end
+	gui:Destroy()
+end
+
+button(rHide, "Hide", Color3.fromRGB(80, 110, 200), function() setVisible(false) end)
+button(rReset, "Reset", Color3.fromRGB(80, 110, 200), function()
+	rolls = 0
+	setStatus("รีเซ็ตแล้ว")
+end)
+button(rClose, "Close", C.red, closeAll)
+
+dotRed.MouseButton1Click:Connect(closeAll)
+dotYellow.MouseButton1Click:Connect(function() setVisible(false) end)
+local large = false
+dotGreen.MouseButton1Click:Connect(function()
+	large = not large
+	TweenService:Create(win, TweenInfo.new(0.2), {Size = large and LARGE or NORMAL}):Play()
+end)
+
+-- ปุ่มลอยเปิด/ปิด
+local toggleBtn = new("TextButton", {
+	Position = UDim2.new(0, 10, 0.5, -20),
+	Size = UDim2.fromOffset(40, 40),
+	BackgroundColor3 = C.accent,
+	BorderSizePixel = 0,
+	Text = "UI",
+	TextColor3 = C.text,
+	Font = Enum.Font.Arcade,
+	TextSize = 16,
+}, gui)
+corner(toggleBtn, 20)
+toggleBtn.MouseButton1Click:Connect(function() setVisible(not visible) end)
+
+table.insert(conns, UIS.InputBegan:Connect(function(input, gpe)
+	if not gpe and input.KeyCode == Enum.KeyCode.RightShift then
+		setVisible(not visible)
+	end
+end))
+
+-- ===== ลากหน้าต่าง (เมาส์ + ทัช) =====
+local dragging, dragStart, startPos
+bar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+		dragging, dragStart, startPos = true, input.Position, win.Position
+	end
+end)
+table.insert(conns, UIS.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch) then
+		local d = input.Position - dragStart
+		win.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X,
+			startPos.Y.Scale, startPos.Y.Offset + d.Y)
+	end
+end))
+table.insert(conns, UIS.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = false
+	end
+end))
+
+selectTab("Main")
